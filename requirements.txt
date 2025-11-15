@@ -1,4 +1,6 @@
 streamlit
 pykrx
 plotly
+pandas
+setuptools
 
