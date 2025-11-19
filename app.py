@@ -3,7 +3,6 @@ from pykrx import stock
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import plotly.express as px
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
 # ------------------------------------------------
 # 🌏 한국 시간 기준 날짜 계산
