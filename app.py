@@ -1,115 +1,142 @@
 import streamlit as st
-from pykrx import stock
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
+import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
+from pykrx import stock
+from datetime import datetime, timedelta, timezone
 
-# ------------------------------------------------
-# 🌏 한국 시간 기준 날짜 계산
-# ------------------------------------------------
-now_kst = datetime.now(ZoneInfo("Asia/Seoul"))
-today_str = now_kst.strftime("%Y%m%d")
-yesterday = now_kst - timedelta(days=1)
-yesterday_str = yesterday.strftime("%Y%m%d")
-three_months_ago_str = (now_kst - timedelta(days=90)).strftime("%Y%m%d")
+# -------------------------------
+# 🕒 한국 시간 함수
+# -------------------------------
+def now_kst():
+    return datetime.now(timezone(timedelta(hours=9)))
 
-# ------------------------------------------------
-# 📘 Streamlit 기본 UI 설정
-# ------------------------------------------------
-st.set_page_config(page_title="거래대금 종목 분석 대시보드", layout="wide")
-st.title("📊 거래대금 분석 대시보드 (KST 기준)")
+def today_kst():
+    return now_kst().date()
 
-# ------------------------------------------------
-# 📈 어제 종목별 거래대금 가져오기
-# ------------------------------------------------
-st.info(f"⏳ {yesterday.strftime('%Y-%m-%d')} 기준 거래대금 데이터를 불러오는 중...")
 
-df_yesterday_raw = stock.get_market_ohlcv_by_ticker(yesterday_str, market="ALL")
-
-# 거래대금 컬럼명 표준화
-df_yesterday_raw.rename(columns={"Value": "거래대금"}, inplace=True)
-
-# 종목명 추가
-df_yesterday_raw["종목명"] = df_yesterday_raw.index.map(stock.get_market_ticker_name)
-
-# 필요한 컬럼만 정리
-df_filtered = df_yesterday_raw[["종목명", "거래대금"]].copy()
-
-# 2,000억 이상 필터링
-df_filtered = df_filtered[df_filtered["거래대금"] > 200_000_000_000]
-
-# 표시용 콤마 추가
-df_filtered["거래대금(표시용)"] = df_filtered["거래대금"].apply(lambda x: f"{x:,}")
-
-df_filtered = df_filtered.sort_values("거래대금", ascending=False)
-
-st.subheader(f"💸 {yesterday.strftime('%Y-%m-%d')} 거래대금 2,000억 이상 종목")
-st.caption("아래 표에서 종목명을 클릭하면 3개월 거래대금 추이를 확인할 수 있습니다.")
-
-# ------------------------------------------------
-# 🧩 AgGrid로 표 출력 (행 클릭)
-# ------------------------------------------------
-gb = GridOptionsBuilder.from_dataframe(df_filtered[["종목명", "거래대금(표시용)"]])
-gb.configure_selection("single")  # 단일 선택
-grid_options = gb.build()
-
-grid_response = AgGrid(
-    df_filtered,
-    gridOptions=grid_options,
-    update_mode=GridUpdateMode.SELECTION_CHANGED,
-    fit_columns_on_grid_load=True,
-    height=350,
+# -------------------------------
+# 📘 기본 설정
+# -------------------------------
+st.set_page_config(
+    page_title="KOSPI Top 거래대금 Dashboard",
+    page_icon="📈",
+    layout="wide"
 )
 
-selected = grid_response["selected_rows"]
-if selected:
-    selected_name = selected[0]["종목명"]
-    st.success(f"📌 선택된 종목: {selected_name}")
+st.title("📈 KOSPI 거래대금 Dashboard")
+st.write("한국 시간 기준으로 데이터를 조회합니다.")
 
-    # ------------------------------------------------
-    # 🔍 티커 코드 찾기
-    # ------------------------------------------------
-    ticker_list = stock.get_market_ticker_list()
-    name_to_code = {stock.get_market_ticker_name(t): t for t in ticker_list}
-    code = name_to_code[selected_name]
 
-    # ------------------------------------------------
-    # 📉 최근 3개월 거래대금 데이터
-    # ------------------------------------------------
-    st.info(f"📈 {selected_name} ({code}) 최근 3개월 거래대금 데이터를 불러오는 중...")
+# -------------------------------
+# ⏱ 날짜 계산 (영업일 보정)
+# -------------------------------
+def get_recent_business_day():
+    today = today_kst()
 
-    df_hist = stock.get_market_ohlcv_by_date(three_months_ago_str, yesterday_str, code)
-    df_hist = df_hist.reset_index()
+    # 토요일(5) / 일요일(6) 보정
+    if today.weekday() == 5:  # 토요일
+        return today - timedelta(days=1)
+    elif today.weekday() == 6:  # 일요일
+        return today - timedelta(days=2)
 
-    # 거래대금 컬럼 추가 (Value 없음 → 직접 계산)
-    df_hist["거래대금"] = df_hist["거래량"] * df_hist["종가"]
-    df_hist["거래대금(억 원)"] = df_hist["거래대금"] / 100_000_000
+    return today
 
-    # ------------------------------------------------
-    # 📊 3개월 거래대금 추이
-    # ------------------------------------------------
-    st.subheader(f"📊 {selected_name} 최근 3개월 거래대금 추이 (억 원)")
-    fig1 = px.line(
-        df_hist,
-        x="날짜",
-        y="거래대금(억 원)",
-        title=f"{selected_name} 3개월 거래대금 변화",
+
+# -------------------------------
+# 📥 데이터 불러오기
+# -------------------------------
+def load_data():
+    target_day = get_recent_business_day().strftime("%Y%m%d")
+
+    df = stock.get_market_trading_value_by_date(
+        fromdate=target_day,
+        todate=target_day,
+        market="KOSPI"
     )
-    st.plotly_chart(fig1, use_container_width=True)
 
-    # ------------------------------------------------
-    # 📈 3개월 일봉 차트
-    # ------------------------------------------------
-    st.subheader(f"📉 {selected_name} 최근 3개월 일봉 차트")
+    df = df.reset_index()
+    df = df.rename(columns={
+        "TRD_VAL": "거래대금"
+    })
 
-    fig2 = px.line(
-        df_hist,
-        x="날짜",
-        y="종가",
-        title=f"{selected_name} 일봉 종가 추이",
+    # 표시용 천단위 콤마 추가
+    df["거래대금(표시용)"] = df["거래대금"].apply(lambda x: f"{x:,} 원")
+
+    # 상위 30 종목
+    df_sorted = df.sort_values(by="거래대금", ascending=False).head(30)
+
+    return df_sorted
+
+
+df_filtered = load_data()
+
+
+# -------------------------------
+# 📊 데이터 테이블
+# -------------------------------
+st.subheader("📊 오늘의 거래대금 상위 종목")
+
+st.dataframe(
+    df_filtered[["종목명", "거래대금(표시용)"]],
+    use_container_width=True
+)
+
+
+# -------------------------------
+# 📈 차트 시각화
+# -------------------------------
+fig = go.Figure()
+
+fig.add_trace(
+    go.Bar(
+        x=df_filtered["종목명"],
+        y=df_filtered["거래대금"],
     )
-    st.plotly_chart(fig2, use_container_width=True)
+)
 
-else:
-    st.warning("👉 위 표에서 종목을 클릭하면 상세 데이터가 표시됩니다.")
+fig.update_layout(
+    title="거래대금 TOP 30",
+    xaxis_title="종목명",
+    yaxis_title="거래대금",
+    height=500
+)
+
+st.plotly_chart(fig, use_container_width=True)
+
+
+# -------------------------------
+# 🔍 개별 종목 상세 데이터 (선택)
+# -------------------------------
+st.subheader("🔍 개별 종목 거래대금 추이 조회")
+
+stock_name = st.selectbox(
+    "종목을 선택하세요",
+    df_filtered["종목명"].tolist()
+)
+
+if stock_name:
+    code = df_filtered[df_filtered["종목명"] == stock_name]["종목코드"].iloc[0]
+    end_date = today_kst()
+    start_date = end_date - timedelta(days=30)
+
+    df_trend = stock.get_market_trading_value_by_date(
+        fromdate=start_date.strftime("%Y%m%d"),
+        todate=end_date.strftime("%Y%m%d"),
+        market="KOSPI"
+    )
+
+    df_trend = df_trend.reset_index()
+    df_trend = df_trend[df_trend["티커"] == code]
+
+    if not df_trend.empty:
+        fig2 = px.line(
+            df_trend,
+            x="날짜",
+            y="TRD_VAL",
+            title=f"{stock_name} 최근 30일 거래대금"
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+    else:
+        st.info("데이터가 없습니다.")
 
