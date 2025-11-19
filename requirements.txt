@@ -1,7 +1,5 @@
-streamlit==1.31.1
-pykrx==1.0.45
-plotly>=5.18.0
-pandas>=1.5.0
-tzdata
+streamlit 
+pykrx 
+plotly 
+pandas 
 setuptools
-
