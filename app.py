@@ -11,6 +11,15 @@ import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 
+# 한국 시간대 지원
+try:
+    from zoneinfo import ZoneInfo
+    USE_ZONEINFO = True
+except ImportError:
+    # Python 3.8 이하 또는 zoneinfo가 없는 경우 pytz 사용
+    import pytz
+    USE_ZONEINFO = False
+
 
 # -------------------------------
 # 📘 기본 설정
@@ -196,7 +205,7 @@ def filter_by_trading_value(
 
 def get_business_dates() -> Tuple[str, str]:
     """
-    어제 날짜와 3개월 전 날짜를 계산합니다 (영업일 기준).
+    어제 날짜와 3개월 전 날짜를 계산합니다 (영업일 기준, 한국 시간대).
     
     Returns:
         Tuple[str, str]: (어제 날짜 문자열, 3개월 전 날짜 문자열) (YYYYMMDD 형식)
@@ -205,7 +214,14 @@ def get_business_dates() -> Tuple[str, str]:
         Exception: 날짜 계산 실패 시
     """
     try:
-        today = datetime.today()
+        # 한국 시간대(KST, UTC+9) 기준으로 현재 시간 가져오기
+        if USE_ZONEINFO:
+            kst = ZoneInfo("Asia/Seoul")
+            today = datetime.now(kst)
+        else:
+            kst = pytz.timezone("Asia/Seoul")
+            today = datetime.now(kst)
+        
         yesterday = today - timedelta(days=1)
         yesterday_str = stock.get_nearest_business_day_in_a_week(
             yesterday.strftime("%Y%m%d")

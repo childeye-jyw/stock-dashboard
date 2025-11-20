@@ -3,3 +3,4 @@ pykrx
 plotly 
 pandas 
 setuptools
+pytz
