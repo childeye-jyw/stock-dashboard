@@ -276,7 +276,11 @@ def create_candlestick_chart(
         high=df['고가'],
         low=df['저가'],
         close=df['종가'],
-        name="일봉"
+        name="일봉",
+        increasing_line_color='red',      # 양봉: 빨간색
+        increasing_fillcolor='red',
+        decreasing_line_color='blue',      # 음봉: 파란색
+        decreasing_fillcolor='blue'
     )])
     fig.update_layout(
         title=f"📈 {stock_name} 최근 3개월 일봉 차트",
