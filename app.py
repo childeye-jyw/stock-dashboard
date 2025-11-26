@@ -222,13 +222,14 @@ def filter_by_trading_value(
 
 
 @st.cache_data(ttl=3600)  # 1시간 캐싱
-def get_business_dates() -> Tuple[str, str]:
+def get_business_dates() -> Tuple[str, str, int]:
     """
     어제 날짜와 3개월 전 날짜를 계산합니다 (영업일 기준, 한국 시간대).
     실제로 데이터가 있는 날짜를 찾습니다.
     
     Returns:
-        Tuple[str, str]: (어제 날짜 문자열, 3개월 전 날짜 문자열) (YYYYMMDD 형식)
+        Tuple[str, str, int]: (어제 날짜 문자열, 3개월 전 날짜 문자열, 날짜 차이 일수) (YYYYMMDD 형식)
+        - 날짜 차이 일수: 계산된 어제 날짜와 찾은 날짜의 차이 (0이면 정상)
         
     Raises:
         Exception: 날짜 계산 실패 시
@@ -304,10 +305,15 @@ def get_business_dates() -> Tuple[str, str]:
         if not yesterday_str:
             raise ValueError("영업일을 찾을 수 없습니다.")
         
+        # 찾은 날짜가 계산된 어제 날짜와 얼마나 차이가 나는지 확인
+        found_date_obj = datetime.strptime(yesterday_str, "%Y%m%d")
+        days_diff = (yesterday.date() - found_date_obj.date()).days
+        
         # 3개월 전 날짜 계산
         three_months_ago = (today - timedelta(days=90)).strftime("%Y%m%d")
         
-        return yesterday_str, three_months_ago
+        # 날짜 차이 정보를 반환값에 포함 (경고 표시용)
+        return yesterday_str, three_months_ago, days_diff
     except Exception as e:
         st.error(f"날짜 계산 실패: {str(e)}")
         raise
@@ -493,14 +499,35 @@ with st.expander("🔍 디버깅 정보 (환경 및 시간대)", expanded=False)
         st.code(traceback.format_exc())
 
 try:
-    yesterday_str, three_months_ago = get_business_dates()
+    yesterday_str, three_months_ago, days_diff = get_business_dates()
     yesterday_display = datetime.strptime(yesterday_str, "%Y%m%d").strftime("%Y-%m-%d")
+    
+    # 찾은 날짜가 계산된 날짜와 차이가 나는 경우 경고
+    if days_diff > 7:
+        st.warning(
+            f"⚠️ **주의**: 계산된 어제 날짜로부터 {days_diff}일 전 날짜({yesterday_display})를 사용합니다.\n\n"
+            f"**가능한 원인:**\n"
+            f"- 최근 {days_diff}일간 모든 날짜에서 데이터 조회 실패\n"
+            f"- pykrx API 서버 문제 또는 네트워크 문제\n"
+            f"- 장기 휴장 기간\n\n"
+            f"실제 데이터가 있는 가장 최근 날짜를 사용합니다."
+        )
     
     # 디버깅: 찾은 날짜 정보
     with st.expander("🔍 디버깅 정보 (시간대 및 날짜)", expanded=False):
         st.write(f"**찾은 날짜:**")
         st.write(f"- 어제 날짜 (조회용): {yesterday_str} ({yesterday_display})")
         st.write(f"- 3개월 전 날짜: {three_months_ago}")
+        st.write(f"- 날짜 차이: 계산된 어제 날짜로부터 {days_diff}일 전")
+        if days_diff > 0:
+            # 계산된 어제 날짜 재계산
+            if USE_ZONEINFO:
+                kst = ZoneInfo("Asia/Seoul")
+            else:
+                kst = pytz.timezone("Asia/Seoul")
+            calculated_yesterday = (datetime.now(kst) - timedelta(days=1)).strftime("%Y-%m-%d")
+            st.write(f"- 계산된 어제 날짜: {calculated_yesterday}")
+            st.write(f"- ⚠️ {days_diff}일 차이가 있습니다. 최근 날짜에서 데이터를 찾지 못했습니다.")
         
 except Exception as e:
     st.error(f"날짜 계산 중 오류가 발생했습니다: {str(e)}")
