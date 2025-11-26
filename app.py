@@ -245,54 +245,56 @@ def get_business_dates() -> Tuple[str, str]:
         # 어제 날짜 계산 및 영업일 조정
         yesterday = today - timedelta(days=1)
         
-        # 최근 영업일 찾기 (최대 10일 전까지 시도)
+        # 최근 영업일 찾기 (최대 60일 전까지 시도 - 장기 휴장 대비)
         yesterday_str = None
         
-        # 방법 1: get_nearest_business_day_in_a_week 사용
-        for days_back in range(0, 11):
-            try:
-                test_date = yesterday - timedelta(days=days_back)
+        # 방법 1: 주말 제외하고 최근 영업일 직접 찾기 (데이터 확인 포함)
+        # 최대 60일 전까지 시도하여 실제로 데이터가 있는 날짜 찾기
+        for days_back in range(0, 61):
+            test_date = yesterday - timedelta(days=days_back)
+            weekday = test_date.weekday()  # 0=월요일, 6=일요일
+            if weekday < 5:  # 월~금
                 test_date_str = test_date.strftime("%Y%m%d")
-                result = stock.get_nearest_business_day_in_a_week(test_date_str)
-                
-                # 결과가 유효한지 확인
-                if result and isinstance(result, str) and len(result) == 8:
-                    # 실제로 데이터가 있는지 확인
-                    try:
-                        test_df = stock.get_market_ohlcv_by_ticker(result, market="ALL")
-                        if test_df is not None and not test_df.empty and "거래대금" in test_df.columns:
-                            yesterday_str = result
-                            break
-                    except KeyError:
-                        # pykrx 내부에서 컬럼 접근 실패 (휴장일)
-                        continue
-                    except Exception:
-                        continue
-            except Exception:
-                continue
+                # 실제로 데이터가 있는지 확인
+                try:
+                    test_df = stock.get_market_ohlcv_by_ticker(test_date_str, market="ALL")
+                    if test_df is not None and not test_df.empty and "거래대금" in test_df.columns:
+                        yesterday_str = test_date_str
+                        break
+                except KeyError:
+                    # pykrx 내부에서 컬럼 접근 실패 (휴장일)
+                    continue
+                except Exception:
+                    # 기타 오류 (네트워크 문제 등)
+                    continue
         
-        # 방법 2: 주말 제외하고 최근 영업일 직접 찾기 (데이터 확인 포함)
+        # 방법 2: get_nearest_business_day_in_a_week 사용 (방법 1이 실패한 경우)
         if not yesterday_str:
-            for days_back in range(0, 11):
-                test_date = yesterday - timedelta(days=days_back)
-                weekday = test_date.weekday()  # 0=월요일, 6=일요일
-                if weekday < 5:  # 월~금
+            for days_back in range(0, 61):
+                try:
+                    test_date = yesterday - timedelta(days=days_back)
                     test_date_str = test_date.strftime("%Y%m%d")
-                    # 실제로 데이터가 있는지 확인
-                    try:
-                        test_df = stock.get_market_ohlcv_by_ticker(test_date_str, market="ALL")
-                        if test_df is not None and not test_df.empty and "거래대금" in test_df.columns:
-                            yesterday_str = test_date_str
-                            break
-                    except KeyError:
-                        # pykrx 내부에서 컬럼 접근 실패 (휴장일)
-                        continue
-                    except Exception:
-                        continue
+                    result = stock.get_nearest_business_day_in_a_week(test_date_str)
+                    
+                    # 결과가 유효한지 확인
+                    if result and isinstance(result, str) and len(result) == 8:
+                        # 실제로 데이터가 있는지 확인
+                        try:
+                            test_df = stock.get_market_ohlcv_by_ticker(result, market="ALL")
+                            if test_df is not None and not test_df.empty and "거래대금" in test_df.columns:
+                                yesterday_str = result
+                                break
+                        except KeyError:
+                            # pykrx 내부에서 컬럼 접근 실패 (휴장일)
+                            continue
+                        except Exception:
+                            continue
+                except Exception:
+                    continue
         
         if not yesterday_str:
-            # 최후의 수단: 주말만 제외한 날짜 사용
-            for days_back in range(0, 11):
+            # 최후의 수단: 주말만 제외한 날짜 사용 (데이터 확인 없이)
+            for days_back in range(0, 61):
                 test_date = yesterday - timedelta(days=days_back)
                 weekday = test_date.weekday()
                 if weekday < 5:  # 월~금
