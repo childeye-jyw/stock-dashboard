@@ -85,7 +85,8 @@ def get_market_data(date_str: str) -> Optional[pd.DataFrame]:
         
         return df
     except KeyError as e:
-        # 컬럼 관련 오류는 휴장일로 처리
+        # pykrx 내부에서 컬럼 접근 실패 (휴장일 또는 데이터 없음)
+        # get_market_ohlcv_by_ticker 내부에서 df[['시가', '고가', '저가', '종가']] 접근 시 발생
         return None
     except Exception as e:
         # 기타 오류는 로그만 남기고 None 반환
@@ -262,6 +263,9 @@ def get_business_dates() -> Tuple[str, str]:
                         if test_df is not None and not test_df.empty and "거래대금" in test_df.columns:
                             yesterday_str = result
                             break
+                    except KeyError:
+                        # pykrx 내부에서 컬럼 접근 실패 (휴장일)
+                        continue
                     except Exception:
                         continue
             except Exception:
@@ -280,6 +284,9 @@ def get_business_dates() -> Tuple[str, str]:
                         if test_df is not None and not test_df.empty and "거래대금" in test_df.columns:
                             yesterday_str = test_date_str
                             break
+                    except KeyError:
+                        # pykrx 내부에서 컬럼 접근 실패 (휴장일)
+                        continue
                     except Exception:
                         continue
         
