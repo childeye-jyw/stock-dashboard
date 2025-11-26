@@ -72,6 +72,9 @@ def get_market_data(date_str: str) -> Optional[pd.DataFrame]:
         if df is None or df.empty:
             return None
         
+        # 실제 컬럼 확인 (디버깅용)
+        actual_columns = list(df.columns) if df is not None else []
+        
         # 필요한 컬럼이 있는지 확인
         required_columns = ["거래대금"]
         missing_columns = [col for col in required_columns if col not in df.columns]
@@ -476,9 +479,15 @@ if df_yesterday is None or df_yesterday.empty:
             if test_df is not None:
                 st.write(f"- API 호출 성공")
                 st.write(f"- 데이터프레임 크기: {test_df.shape}")
-                st.write(f"- 컬럼: {list(test_df.columns)}")
+                st.write(f"- 실제 컬럼: {list(test_df.columns)}")
+                st.write(f"- 데이터프레임 타입: {type(test_df)}")
                 if not test_df.empty:
                     st.write(f"- 데이터 행 수: {len(test_df)}")
+                    st.write(f"- 인덱스 샘플: {list(test_df.index[:5]) if len(test_df) > 0 else '없음'}")
+                    # 첫 번째 행 데이터 샘플
+                    if len(test_df) > 0:
+                        st.write(f"- 첫 번째 행 데이터:")
+                        st.json(test_df.iloc[0].to_dict())
                 else:
                     st.write(f"- ⚠️ 데이터프레임이 비어있습니다")
             else:
@@ -486,21 +495,31 @@ if df_yesterday is None or df_yesterday.empty:
         except Exception as api_e:
             st.write(f"- ❌ API 호출 실패: {str(api_e)}")
             st.write(f"- 오류 타입: {type(api_e).__name__}")
+            import traceback
+            st.write(f"- 상세 오류:")
+            st.code(traceback.format_exc())
         
         # 다른 날짜들도 시도
         st.write(f"\n**다른 날짜 시도:**")
-        for days_back in range(0, 5):
+        for days_back in range(0, 10):
             try:
                 test_date = datetime.strptime(yesterday_str, "%Y%m%d") - timedelta(days=days_back)
                 test_date_str = test_date.strftime("%Y%m%d")
                 test_df = stock.get_market_ohlcv_by_ticker(test_date_str, market="ALL")
-                if test_df is not None and not test_df.empty and "거래대금" in test_df.columns:
-                    st.write(f"- ✅ {test_date_str}: 데이터 있음 ({len(test_df)}개 종목)")
-                    break
+                if test_df is not None:
+                    st.write(f"- {test_date_str}:")
+                    st.write(f"  - 크기: {test_df.shape}")
+                    st.write(f"  - 컬럼: {list(test_df.columns)}")
+                    if not test_df.empty and "거래대금" in test_df.columns:
+                        st.write(f"  - ✅ 데이터 있음 ({len(test_df)}개 종목)")
+                        break
+                    else:
+                        st.write(f"  - ❌ 데이터 없음 또는 컬럼 누락")
                 else:
-                    st.write(f"- ❌ {test_date_str}: 데이터 없음")
+                    st.write(f"- ❌ {test_date_str}: API 호출 결과 None")
             except Exception as test_e:
                 st.write(f"- ❌ {test_date_str}: 오류 - {str(test_e)}")
+                st.write(f"  - 오류 타입: {type(test_e).__name__}")
     
     st.stop()
 
