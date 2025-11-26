@@ -372,12 +372,56 @@ def create_candlestick_chart(
 # -------------------------------
 # 📅 날짜 계산
 # -------------------------------
-# 디버깅: 시간대 및 시간 정보 출력
-with st.expander("🔍 디버깅 정보 (시간대 및 날짜)", expanded=False):
+# 디버깅: 환경 정보 및 시간대 정보 출력
+with st.expander("🔍 디버깅 정보 (환경 및 시간대)", expanded=False):
     try:
+        import sys
+        import platform
         import time
         import os
         
+        st.write("**Python 환경 정보:**")
+        st.write(f"- Python 버전: {sys.version}")
+        st.write(f"- Python 실행 경로: {sys.executable}")
+        st.write(f"- 플랫폼: {platform.platform()}")
+        st.write(f"- 시스템: {platform.system()}")
+        
+        st.write(f"\n**패키지 버전 정보:**")
+        try:
+            import pykrx
+            st.write(f"- pykrx 버전: {pykrx.__version__ if hasattr(pykrx, '__version__') else '버전 정보 없음'}")
+        except Exception as e:
+            st.write(f"- pykrx 버전 확인 실패: {str(e)}")
+        
+        try:
+            import pandas as pd
+            st.write(f"- pandas 버전: {pd.__version__}")
+        except Exception:
+            st.write(f"- pandas 버전: 확인 불가")
+        
+        try:
+            import requests
+            st.write(f"- requests 버전: {requests.__version__}")
+        except Exception:
+            st.write(f"- requests 버전: 확인 불가")
+        
+        st.write(f"\n**네트워크 환경:**")
+        try:
+            import socket
+            hostname = socket.gethostname()
+            st.write(f"- 호스트명: {hostname}")
+        except Exception:
+            st.write(f"- 호스트명: 확인 불가")
+        
+        # 환경 변수 확인
+        st.write(f"\n**환경 변수:**")
+        env_vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'NO_PROXY', 'no_proxy']
+        for var in env_vars:
+            value = os.environ.get(var, '설정되지 않음')
+            if value != '설정되지 않음':
+                st.write(f"- {var}: {value}")
+        
+        st.write(f"\n**시간대 정보:**")
         # UTC 시간
         utc_now = datetime.utcnow()
         
@@ -424,9 +468,27 @@ with st.expander("🔍 디버깅 정보 (시간대 및 날짜)", expanded=False)
         st.write(f"- UTC 어제 날짜: {yesterday_utc.strftime('%Y-%m-%d (%A)')}")
         st.write(f"- UTC 어제 날짜 문자열: {yesterday_utc.strftime('%Y%m%d')}")
         st.write(f"- ⚠️ 차이: KST와 UTC 기준 날짜가 다를 수 있습니다!")
+        
+        # pykrx API 연결 테스트
+        st.write(f"\n**pykrx API 연결 테스트:**")
+        try:
+            # 간단한 API 호출 테스트
+            test_ticker_list = stock.get_market_ticker_list(market="ALL")
+            if test_ticker_list:
+                st.write(f"- ✅ get_market_ticker_list() 성공: {len(test_ticker_list)}개 종목")
+            else:
+                st.write(f"- ⚠️ get_market_ticker_list() 결과: 빈 리스트")
+        except Exception as api_test_e:
+            st.write(f"- ❌ API 연결 테스트 실패: {str(api_test_e)}")
+            st.write(f"- 오류 타입: {type(api_test_e).__name__}")
+            import traceback
+            st.write(f"- 상세 오류:")
+            st.code(traceback.format_exc())
             
     except Exception as debug_e:
         st.write(f"디버깅 정보 수집 중 오류: {str(debug_e)}")
+        import traceback
+        st.code(traceback.format_exc())
 
 try:
     yesterday_str, three_months_ago = get_business_dates()
