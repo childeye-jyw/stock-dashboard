@@ -491,12 +491,24 @@ if df_yesterday is None or df_yesterday.empty:
         st.write(f"**조회 시도한 날짜:** {yesterday_str}")
         st.write(f"**조회 시도한 날짜 (표시용):** {yesterday_display}")
         
-        # 직접 API 호출 시도
-        st.write(f"\n**직접 API 호출 테스트:**")
+        # 직접 API 호출 시도 (raw 데이터 확인)
+        st.write(f"\n**직접 API 호출 테스트 (raw 데이터 확인):**")
         try:
+            # pykrx의 내부 함수를 직접 호출하여 raw 데이터 확인
+            from pykrx import stock
+            import requests
+            from datetime import datetime as dt
+            
+            # 날짜를 datetime으로 변환
+            date_obj = dt.strptime(yesterday_str, "%Y%m%d")
+            
+            # pykrx의 실제 API 호출 방식 확인
+            st.write(f"- 날짜: {yesterday_str} ({date_obj.strftime('%Y-%m-%d')})")
+            
+            # 직접 API 호출 시도
             test_df = stock.get_market_ohlcv_by_ticker(yesterday_str, market="ALL")
             if test_df is not None:
-                st.write(f"- API 호출 성공")
+                st.write(f"- ✅ API 호출 성공")
                 st.write(f"- 데이터프레임 크기: {test_df.shape}")
                 st.write(f"- 실제 컬럼: {list(test_df.columns)}")
                 st.write(f"- 데이터프레임 타입: {type(test_df)}")
@@ -511,6 +523,11 @@ if df_yesterday is None or df_yesterday.empty:
                     st.write(f"- ⚠️ 데이터프레임이 비어있습니다")
             else:
                 st.write(f"- ⚠️ API 호출 결과: None")
+        except KeyError as key_e:
+            st.write(f"- ❌ KeyError 발생: {str(key_e)}")
+            st.write(f"- ⚠️ pykrx 내부에서 컬럼 접근 실패 (휴장일 또는 데이터 없음)")
+            st.write(f"- 이 오류는 pykrx 라이브러리 내부에서 발생합니다.")
+            st.write(f"- 해결 방법: 더 이전 날짜를 시도하거나 다른 API 사용")
         except Exception as api_e:
             st.write(f"- ❌ API 호출 실패: {str(api_e)}")
             st.write(f"- 오류 타입: {type(api_e).__name__}")
@@ -519,8 +536,9 @@ if df_yesterday is None or df_yesterday.empty:
             st.code(traceback.format_exc())
         
         # 다른 날짜들도 시도
-        st.write(f"\n**다른 날짜 시도:**")
-        for days_back in range(0, 10):
+        st.write(f"\n**다른 날짜 시도 (최대 30일 전까지):**")
+        found_date = None
+        for days_back in range(0, 31):
             try:
                 test_date = datetime.strptime(yesterday_str, "%Y%m%d") - timedelta(days=days_back)
                 test_date_str = test_date.strftime("%Y%m%d")
@@ -531,14 +549,28 @@ if df_yesterday is None or df_yesterday.empty:
                     st.write(f"  - 컬럼: {list(test_df.columns)}")
                     if not test_df.empty and "거래대금" in test_df.columns:
                         st.write(f"  - ✅ 데이터 있음 ({len(test_df)}개 종목)")
+                        found_date = test_date_str
                         break
                     else:
                         st.write(f"  - ❌ 데이터 없음 또는 컬럼 누락")
                 else:
                     st.write(f"- ❌ {test_date_str}: API 호출 결과 None")
+            except KeyError as key_e:
+                # pykrx 내부 KeyError (휴장일)
+                st.write(f"- ⚠️ {test_date_str}: 휴장일 또는 데이터 없음 (KeyError)")
+                continue
             except Exception as test_e:
                 st.write(f"- ❌ {test_date_str}: 오류 - {str(test_e)}")
                 st.write(f"  - 오류 타입: {type(test_e).__name__}")
+        
+        if found_date:
+            st.write(f"\n**✅ 사용 가능한 날짜 발견: {found_date}**")
+        else:
+            st.write(f"\n**❌ 30일 내 사용 가능한 날짜를 찾을 수 없습니다.**")
+            st.write(f"**가능한 원인:**")
+            st.write(f"- 장기 휴장 기간 (연말연시 등)")
+            st.write(f"- pykrx API 서버 문제")
+            st.write(f"- 날짜 형식 문제")
     
     st.stop()
 
