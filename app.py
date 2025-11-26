@@ -394,24 +394,36 @@ with st.expander("🔍 디버깅 정보 (시간대 및 날짜)", expanded=False)
         
         st.write("**시스템 시간 정보:**")
         st.write(f"- UTC 시간: {utc_now.strftime('%Y-%m-%d %H:%M:%S')}")
-        st.write(f"- 로컬 시간: {local_now.strftime('%Y-%m-%d %H:%M:%S')}")
-        st.write(f"- 한국 시간(KST): {kst_now.strftime('%Y-%m-%d %H:%M:%S')}")
+        st.write(f"- 로컬 시간: {local_now.strftime('%Y-%m-%d %H:%M:%S')} (시스템 timezone 기준)")
+        st.write(f"- 한국 시간(KST): {kst_now.strftime('%Y-%m-%d %H:%M:%S')} (명시적 KST)")
+        st.write(f"- KST와 UTC 차이: {kst_now.hour - utc_now.hour}시간 (예상: 9시간)")
         st.write(f"- 시스템 timezone: {time.tzname}")
         st.write(f"- TZ 환경변수: {os.environ.get('TZ', '설정되지 않음')}")
         
-        # 계산된 날짜들
-        yesterday_calc = kst_now - timedelta(days=1)
-        st.write(f"\n**계산된 날짜:**")
-        st.write(f"- 어제 날짜 (KST 기준): {yesterday_calc.strftime('%Y-%m-%d (%A)')}")
-        st.write(f"- 어제 날짜 문자열: {yesterday_calc.strftime('%Y%m%d')}")
-        
-        # USE_ZONEINFO 상태
-        st.write(f"\n**시간대 라이브러리:**")
-        st.write(f"- USE_ZONEINFO: {USE_ZONEINFO}")
+        # 시간대 정보 상세
+        st.write(f"\n**시간대 상세 정보:**")
         if USE_ZONEINFO:
             st.write(f"- zoneinfo 사용 중")
+            st.write(f"- KST timezone 객체: {kst}")
+            st.write(f"- KST 시간 타임존 정보: {kst_now.tzinfo}")
         else:
             st.write(f"- pytz 사용 중")
+            st.write(f"- KST timezone 객체: {kst}")
+            st.write(f"- KST 시간 타임존 정보: {kst_now.tzinfo}")
+        
+        # 계산된 날짜들
+        yesterday_calc = kst_now - timedelta(days=1)
+        st.write(f"\n**계산된 날짜 (KST 기준):**")
+        st.write(f"- 어제 날짜: {yesterday_calc.strftime('%Y-%m-%d (%A)')}")
+        st.write(f"- 어제 날짜 문자열: {yesterday_calc.strftime('%Y%m%d')}")
+        st.write(f"- 어제 날짜 요일: {yesterday_calc.weekday()} (0=월요일, 6=일요일)")
+        
+        # UTC 기준으로도 계산
+        yesterday_utc = utc_now - timedelta(days=1)
+        st.write(f"\n**비교: UTC 기준 계산:**")
+        st.write(f"- UTC 어제 날짜: {yesterday_utc.strftime('%Y-%m-%d (%A)')}")
+        st.write(f"- UTC 어제 날짜 문자열: {yesterday_utc.strftime('%Y%m%d')}")
+        st.write(f"- ⚠️ 차이: KST와 UTC 기준 날짜가 다를 수 있습니다!")
             
     except Exception as debug_e:
         st.write(f"디버깅 정보 수집 중 오류: {str(debug_e)}")
