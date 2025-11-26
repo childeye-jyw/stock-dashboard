@@ -222,11 +222,41 @@ def get_business_dates() -> Tuple[str, str]:
             kst = pytz.timezone("Asia/Seoul")
             today = datetime.now(kst)
         
+        # 어제 날짜 계산 및 영업일 조정
         yesterday = today - timedelta(days=1)
-        yesterday_str = stock.get_nearest_business_day_in_a_week(
-            yesterday.strftime("%Y%m%d")
-        )
+        yesterday_date_str = yesterday.strftime("%Y%m%d")
+        
+        # 영업일 조정 (최대 7일 전까지 시도)
+        yesterday_str = None
+        for days_back in range(0, 8):
+            try:
+                test_date = yesterday - timedelta(days=days_back)
+                test_date_str = test_date.strftime("%Y%m%d")
+                result = stock.get_nearest_business_day_in_a_week(test_date_str)
+                
+                # 결과가 유효한지 확인
+                if result and isinstance(result, str) and len(result) == 8:
+                    yesterday_str = result
+                    break
+            except Exception:
+                continue
+        
+        # 여전히 실패하면 직접 계산
+        if not yesterday_str:
+            # 주말 제외하고 최근 영업일 찾기
+            for days_back in range(0, 8):
+                test_date = yesterday - timedelta(days=days_back)
+                weekday = test_date.weekday()  # 0=월요일, 6=일요일
+                if weekday < 5:  # 월~금
+                    yesterday_str = test_date.strftime("%Y%m%d")
+                    break
+        
+        if not yesterday_str:
+            raise ValueError("영업일을 찾을 수 없습니다.")
+        
+        # 3개월 전 날짜 계산
         three_months_ago = (today - timedelta(days=90)).strftime("%Y%m%d")
+        
         return yesterday_str, three_months_ago
     except Exception as e:
         st.error(f"날짜 계산 실패: {str(e)}")
