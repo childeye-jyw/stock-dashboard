@@ -362,9 +362,60 @@ def create_candlestick_chart(
 # -------------------------------
 # 📅 날짜 계산
 # -------------------------------
+# 디버깅: 시간대 및 시간 정보 출력
+with st.expander("🔍 디버깅 정보 (시간대 및 날짜)", expanded=False):
+    try:
+        import time
+        import os
+        
+        # UTC 시간
+        utc_now = datetime.utcnow()
+        
+        # 로컬 시간
+        local_now = datetime.now()
+        
+        # 한국 시간대 시간
+        if USE_ZONEINFO:
+            kst = ZoneInfo("Asia/Seoul")
+            kst_now = datetime.now(kst)
+        else:
+            kst = pytz.timezone("Asia/Seoul")
+            kst_now = datetime.now(kst)
+        
+        st.write("**시스템 시간 정보:**")
+        st.write(f"- UTC 시간: {utc_now.strftime('%Y-%m-%d %H:%M:%S')}")
+        st.write(f"- 로컬 시간: {local_now.strftime('%Y-%m-%d %H:%M:%S')}")
+        st.write(f"- 한국 시간(KST): {kst_now.strftime('%Y-%m-%d %H:%M:%S')}")
+        st.write(f"- 시스템 timezone: {time.tzname}")
+        st.write(f"- TZ 환경변수: {os.environ.get('TZ', '설정되지 않음')}")
+        
+        # 계산된 날짜들
+        yesterday_calc = kst_now - timedelta(days=1)
+        st.write(f"\n**계산된 날짜:**")
+        st.write(f"- 어제 날짜 (KST 기준): {yesterday_calc.strftime('%Y-%m-%d (%A)')}")
+        st.write(f"- 어제 날짜 문자열: {yesterday_calc.strftime('%Y%m%d')}")
+        
+        # USE_ZONEINFO 상태
+        st.write(f"\n**시간대 라이브러리:**")
+        st.write(f"- USE_ZONEINFO: {USE_ZONEINFO}")
+        if USE_ZONEINFO:
+            st.write(f"- zoneinfo 사용 중")
+        else:
+            st.write(f"- pytz 사용 중")
+            
+    except Exception as debug_e:
+        st.write(f"디버깅 정보 수집 중 오류: {str(debug_e)}")
+
 try:
     yesterday_str, three_months_ago = get_business_dates()
     yesterday_display = datetime.strptime(yesterday_str, "%Y%m%d").strftime("%Y-%m-%d")
+    
+    # 디버깅: 찾은 날짜 정보
+    with st.expander("🔍 디버깅 정보 (시간대 및 날짜)", expanded=False):
+        st.write(f"**찾은 날짜:**")
+        st.write(f"- 어제 날짜 (조회용): {yesterday_str} ({yesterday_display})")
+        st.write(f"- 3개월 전 날짜: {three_months_ago}")
+        
 except Exception as e:
     st.error(f"날짜 계산 중 오류가 발생했습니다: {str(e)}")
     st.stop()
@@ -412,6 +463,45 @@ if df_yesterday is None or df_yesterday.empty:
         f"- 날짜가 미래일 수 있습니다\n\n"
         f"다른 날짜를 선택하거나 잠시 후 다시 시도해주세요."
     )
+    
+    # 디버깅: 데이터 조회 시도 정보
+    with st.expander("🔍 디버깅 정보 (데이터 조회)", expanded=True):
+        st.write(f"**조회 시도한 날짜:** {yesterday_str}")
+        st.write(f"**조회 시도한 날짜 (표시용):** {yesterday_display}")
+        
+        # 직접 API 호출 시도
+        st.write(f"\n**직접 API 호출 테스트:**")
+        try:
+            test_df = stock.get_market_ohlcv_by_ticker(yesterday_str, market="ALL")
+            if test_df is not None:
+                st.write(f"- API 호출 성공")
+                st.write(f"- 데이터프레임 크기: {test_df.shape}")
+                st.write(f"- 컬럼: {list(test_df.columns)}")
+                if not test_df.empty:
+                    st.write(f"- 데이터 행 수: {len(test_df)}")
+                else:
+                    st.write(f"- ⚠️ 데이터프레임이 비어있습니다")
+            else:
+                st.write(f"- ⚠️ API 호출 결과: None")
+        except Exception as api_e:
+            st.write(f"- ❌ API 호출 실패: {str(api_e)}")
+            st.write(f"- 오류 타입: {type(api_e).__name__}")
+        
+        # 다른 날짜들도 시도
+        st.write(f"\n**다른 날짜 시도:**")
+        for days_back in range(0, 5):
+            try:
+                test_date = datetime.strptime(yesterday_str, "%Y%m%d") - timedelta(days=days_back)
+                test_date_str = test_date.strftime("%Y%m%d")
+                test_df = stock.get_market_ohlcv_by_ticker(test_date_str, market="ALL")
+                if test_df is not None and not test_df.empty and "거래대금" in test_df.columns:
+                    st.write(f"- ✅ {test_date_str}: 데이터 있음 ({len(test_df)}개 종목)")
+                    break
+                else:
+                    st.write(f"- ❌ {test_date_str}: 데이터 없음")
+            except Exception as test_e:
+                st.write(f"- ❌ {test_date_str}: 오류 - {str(test_e)}")
+    
     st.stop()
 
 # 데이터 로딩 완료 후 메시지 변경
