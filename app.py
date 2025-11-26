@@ -217,9 +217,11 @@ def filter_by_trading_value(
     return df_filtered
 
 
+@st.cache_data(ttl=3600)  # 1시간 캐싱
 def get_business_dates() -> Tuple[str, str]:
     """
     어제 날짜와 3개월 전 날짜를 계산합니다 (영업일 기준, 한국 시간대).
+    실제로 데이터가 있는 날짜를 찾습니다.
     
     Returns:
         Tuple[str, str]: (어제 날짜 문자열, 3개월 전 날짜 문자열) (YYYYMMDD 형식)
@@ -238,11 +240,12 @@ def get_business_dates() -> Tuple[str, str]:
         
         # 어제 날짜 계산 및 영업일 조정
         yesterday = today - timedelta(days=1)
-        yesterday_date_str = yesterday.strftime("%Y%m%d")
         
-        # 영업일 조정 (최대 7일 전까지 시도)
+        # 최근 영업일 찾기 (최대 10일 전까지 시도)
         yesterday_str = None
-        for days_back in range(0, 8):
+        
+        # 방법 1: get_nearest_business_day_in_a_week 사용
+        for days_back in range(0, 11):
             try:
                 test_date = yesterday - timedelta(days=days_back)
                 test_date_str = test_date.strftime("%Y%m%d")
@@ -250,17 +253,38 @@ def get_business_dates() -> Tuple[str, str]:
                 
                 # 결과가 유효한지 확인
                 if result and isinstance(result, str) and len(result) == 8:
-                    yesterday_str = result
-                    break
+                    # 실제로 데이터가 있는지 확인
+                    try:
+                        test_df = stock.get_market_ohlcv_by_ticker(result, market="ALL")
+                        if test_df is not None and not test_df.empty and "거래대금" in test_df.columns:
+                            yesterday_str = result
+                            break
+                    except Exception:
+                        continue
             except Exception:
                 continue
         
-        # 여전히 실패하면 직접 계산
+        # 방법 2: 주말 제외하고 최근 영업일 직접 찾기 (데이터 확인 포함)
         if not yesterday_str:
-            # 주말 제외하고 최근 영업일 찾기
-            for days_back in range(0, 8):
+            for days_back in range(0, 11):
                 test_date = yesterday - timedelta(days=days_back)
                 weekday = test_date.weekday()  # 0=월요일, 6=일요일
+                if weekday < 5:  # 월~금
+                    test_date_str = test_date.strftime("%Y%m%d")
+                    # 실제로 데이터가 있는지 확인
+                    try:
+                        test_df = stock.get_market_ohlcv_by_ticker(test_date_str, market="ALL")
+                        if test_df is not None and not test_df.empty and "거래대금" in test_df.columns:
+                            yesterday_str = test_date_str
+                            break
+                    except Exception:
+                        continue
+        
+        if not yesterday_str:
+            # 최후의 수단: 주말만 제외한 날짜 사용
+            for days_back in range(0, 11):
+                test_date = yesterday - timedelta(days=days_back)
+                weekday = test_date.weekday()
                 if weekday < 5:  # 월~금
                     yesterday_str = test_date.strftime("%Y%m%d")
                     break
