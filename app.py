@@ -67,11 +67,25 @@ def get_market_data(date_str: str) -> Optional[pd.DataFrame]:
     """
     try:
         df = stock.get_market_ohlcv_by_ticker(date_str, market="ALL")
+        
+        # 데이터가 None이거나 비어있는 경우
         if df is None or df.empty:
             return None
+        
+        # 필요한 컬럼이 있는지 확인
+        required_columns = ["거래대금"]
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        
+        if missing_columns:
+            # 휴장일이거나 데이터가 없는 경우
+            return None
+        
         return df
+    except KeyError as e:
+        # 컬럼 관련 오류는 휴장일로 처리
+        return None
     except Exception as e:
-        st.error(f"시장 데이터 조회 실패 ({date_str}): {str(e)}")
+        # 기타 오류는 로그만 남기고 None 반환
         return None
 
 
@@ -366,7 +380,14 @@ df_yesterday = get_market_data(yesterday_str)
 
 if df_yesterday is None or df_yesterday.empty:
     loading_placeholder.empty()
-    st.error("어제 거래대금 데이터를 불러올 수 없습니다. 시장이 휴장일일 수 있습니다.")
+    st.warning(
+        f"⚠️ {yesterday_display} 거래대금 데이터를 불러올 수 없습니다.\n\n"
+        f"**가능한 원인:**\n"
+        f"- 시장이 휴장일일 수 있습니다 (주말, 공휴일 등)\n"
+        f"- 데이터 서버에 일시적인 문제가 있을 수 있습니다\n"
+        f"- 날짜가 미래일 수 있습니다\n\n"
+        f"다른 날짜를 선택하거나 잠시 후 다시 시도해주세요."
+    )
     st.stop()
 
 # 데이터 로딩 완료 후 메시지 변경
