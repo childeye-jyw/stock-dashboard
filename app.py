@@ -44,10 +44,25 @@ def get_ticker_name_mapping() -> Dict[str, str]:
     """
     try:
         ticker_list = stock.get_market_ticker_list(market="ALL")
-        ticker_dict = {
-            stock.get_market_ticker_name(t): t 
-            for t in ticker_list
-        }
+        ticker_dict = {}
+        
+        for t in ticker_list:
+            try:
+                name = stock.get_market_ticker_name(t)
+                # 문자열인지 확인 (DataFrame이 반환될 수 있음)
+                if isinstance(name, str):
+                    ticker_dict[name] = t
+                elif hasattr(name, 'iloc'):  # DataFrame인 경우
+                    # DataFrame의 첫 번째 값을 사용하거나 티커 코드를 그대로 사용
+                    ticker_dict[str(t)] = t
+                else:
+                    # 기타 타입인 경우 문자열로 변환
+                    ticker_dict[str(name)] = t
+            except Exception:
+                # 개별 티커 조회 실패 시 티커 코드를 그대로 사용
+                ticker_dict[str(t)] = t
+                continue
+        
         return ticker_dict
     except Exception as e:
         st.error(f"종목 리스트 조회 실패: {str(e)}")
@@ -795,26 +810,26 @@ if selected_name:
         # 데이터 로딩 완료 후 메시지 변경
         loading_hist_placeholder.empty()
         st.success(f"✅ {selected_name} ({code})의 최근 3개월 데이터를 성공적으로 불러왔습니다! ({len(df_hist)}개 일자)")
-        
+
         # 거래대금 계산
         try:
             df_hist = calculate_trading_value(df_hist)
         except ValueError as e:
             st.error(str(e))
             st.stop()
-        
+
         # -------------------------------
         # 🔹 거래대금 그래프
         # -------------------------------
         fig1 = create_trading_value_chart(df_hist, selected_name)
         st.plotly_chart(fig1, use_container_width=True)
-        
+
         # -------------------------------
         # 🔹 3개월 일봉 차트
         # -------------------------------
         fig2 = create_candlestick_chart(df_hist, selected_name)
         st.plotly_chart(fig2, use_container_width=True)
-        
+
     except Exception as e:
         st.error(f"데이터 처리 중 오류가 발생했습니다: {str(e)}")
         st.exception(e)
